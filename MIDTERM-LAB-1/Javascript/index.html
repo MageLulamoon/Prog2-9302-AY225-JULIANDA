@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sales Trend Moving Average (Browser)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sales Trend Moving Average</h1>
+    <p>Select a CSV dataset (must contain <code>title</code>, <code>release_date</code>, and <code>total_sales</code> headers).</p>
+
+    <input type="file" id="fileInput" accept=".csv">
+    <label><input type="checkbox" id="hideZeros" checked> Hide rows with total_sales = 0 and moving avg = 0 / N/A</label>
+    <!-- new sort options -->
+    <div id="sortOptions" style="margin:6px 0;">
+      <label for="sortBySelect">Initial sort column:</label>
+      <select id="sortBySelect">
+        <option value="0">Title</option>
+        <option value="1" selected>Release Date</option>
+        <option value="2">Total Sales</option>
+        <option value="3">3-Record Moving Avg</option>
+      </select>
+      <label><input type="checkbox" id="sortDesc"> Descending</label>
+    </div>
+    <button id="processBtn">Process</button>
+    <div id="status" class="status"></div>
+
+    <div id="controls" style="display:none">
+      <button id="downloadCsv">Download Filtered CSV</button>
+      <button id="downloadHtml">Download HTML Report</button>
+      <input id="searchBox" placeholder="Filter title..." />
+    </div>
+
+    <div id="summary" class="summary"></div>
+    <div id="tableWrap"></div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
