@@ -21,6 +21,8 @@ const sortDescCheckbox = document.getElementById('sortDesc');
 })();
 
 let lastFilteredRecords = [];
+let currentPage = 1;
+const itemsPerPage = 50;
 
 function readFileAsText(file) {
   return new Promise((res, rej) => {
@@ -87,12 +89,19 @@ function filterRelevant(records) {
   });
 }
 
-function buildTable(records) {
+function buildTable(records, resetPage = true) {
   if (!records || records.length === 0) {
     tableWrap.innerHTML = "<p>No relevant rows to display.</p>";
+    document.getElementById('paginationWrap').style.display = 'none';
     return;
   }
-  // user instruction
+  
+  if (resetPage) currentPage = 1;
+  const totalPages = Math.ceil(records.length / itemsPerPage);
+  const startIdx = (currentPage - 1) * itemsPerPage;
+  const endIdx = Math.min(startIdx + itemsPerPage, records.length);
+  const pageRecords = records.slice(startIdx, endIdx);
+  
   tableWrap.innerHTML = '<p>Click any column header to sort ▲/▼</p>';
   let html = '<table id="dataTbl" data-sort-col="" data-sort-dir=""><thead><tr>';
   const headers = ['Title','Release Date','Total Sales','3-Record Moving Avg'];
@@ -101,26 +110,21 @@ function buildTable(records) {
   });
   html += '</tr></thead><tbody>';
 
-  for (const r of records) {
+  for (const r of pageRecords) {
     html += `<tr><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.releaseRaw)}</td><td>${r.totalSales.toFixed(2)}</td><td>${r.movingAvg}</td></tr>`;
   }
   html += '</tbody></table>';
   tableWrap.innerHTML = html;
+  buildPaginationControls(totalPages, records.length);
 
   // sorting script using tbody and indicator classes
-  // n = column index, optional asc flag toggles direction if provided
-  window.sortTable = function(n, forceAsc){
-    console.log('sortTable called, column', n, 'forceAsc', forceAsc);
+  window.sortTable = function(n){
     const table = document.getElementById('dataTbl');
     const tbody = table.tBodies[0];
     if (!tbody) return;
     const lastCol = table.getAttribute('data-sort-col');
-    let asc;
-    if (typeof forceAsc === 'boolean') {
-      asc = forceAsc;
-    } else {
-      asc = table.getAttribute('data-sort-dir') !== 'asc' || lastCol !== String(n);
-    }
+    let asc = table.getAttribute('data-sort-dir') !== 'asc' || lastCol !== String(n);
+    
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.sort((r1,r2)=>{
       let a = (r1.cells[n] ? r1.cells[n].textContent.trim() : '');
@@ -151,6 +155,49 @@ function updateIndicators(col, asc) {
     }
   });
 }
+
+function buildPaginationControls(totalPages, totalRecords) {
+  const paginationWrap = document.getElementById('paginationWrap');
+  if (totalPages <= 1) {
+    paginationWrap.style.display = 'none';
+    return;
+  }
+  
+  paginationWrap.style.display = 'block';
+  let html = '';
+  
+  if (currentPage > 1) {
+    html += `<button onclick="gotoPage(${currentPage - 1})">← Previous</button>`;
+  }
+  
+  html += `<span style="margin:0 12px;">Page <input type="number" id="pageInput" min="1" max="${totalPages}" value="${currentPage}" style="width:50px; padding:4px; margin:0 6px;"> of ${totalPages} (${totalRecords} total records, ${itemsPerPage} per page)</span>`;
+  
+  if (currentPage < totalPages) {
+    html += `<button onclick="gotoPage(${currentPage + 1})">Next →</button>`;
+  }
+  
+  paginationWrap.innerHTML = html;
+  
+  const pageInput = document.getElementById('pageInput');
+  if (pageInput) {
+    pageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const page = parseInt(pageInput.value, 10);
+        const maxPage = Math.ceil(totalRecords / itemsPerPage);
+        if (!isNaN(page) && page >= 1 && page <= maxPage) {
+          gotoPage(page);
+        }
+      }
+    });
+  }
+}
+
+window.gotoPage = function(pageNum) {
+  const maxPages = Math.ceil(lastFilteredRecords.length / itemsPerPage);
+  if (pageNum < 1 || pageNum > maxPages) return;
+  currentPage = pageNum;
+  buildTable(lastFilteredRecords, false);
+};
 
 function escapeHtml(s) {
   if (!s) return '';
@@ -214,16 +261,15 @@ async function processFile() {
       const col = parseInt(sortBySelect.value,10);
       const desc = sortDescCheckbox && sortDescCheckbox.checked;
       if (!isNaN(col)) {
-        // call with forced direction
-        sortTable(col, !desc);
+        sortTable(col);
       }
     }
 
     // hook up search and downloads
     searchBox.oninput = () => {
       const q = searchBox.value.trim().toLowerCase();
-      const sub = filtered.filter(r => r.title.toLowerCase().includes(q));
-      buildTable(sub);
+      const sub = lastFilteredRecords.filter(r => r.title.toLowerCase().includes(q));
+      buildTable(sub, true);
     };
 
     hideZerosCheckbox.onchange = () => {

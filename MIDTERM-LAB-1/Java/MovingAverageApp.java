@@ -204,79 +204,134 @@ public class MovingAverageApp {
         }
     }
 
-    // Create a simple readable HTML report (table + summary)
+    // Create HTML report with pagination support
     private static void writeHtmlReport(List<DataRecord> records, Path outPath) throws IOException {
-    int totalRows = records.size();
-    double sumSales = records.stream().mapToDouble(DataRecord::getTotalSales).sum();
+        int totalRows = records.size();
+        double sumSales = records.stream().mapToDouble(DataRecord::getTotalSales).sum();
+        final int itemsPerPage = 50;
 
-    StringBuilder html = new StringBuilder();
-    html.append("<!doctype html><html><head><meta charset='utf-8'><title>Moving Average Report</title>");
-    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:18px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f2f2f2;cursor:pointer}th:hover{background:#e8e8e8}th.sorted-asc,th.sorted-desc{background:#e0e0e0}th.sorted-asc::after{content:' ▲';color:#333}th.sorted-desc::after{content:' ▼';color:#333}caption{font-weight:bold;margin-bottom:8px}</style>");
-    // improved sort script: operate on tbody rows, toggle direction per‑column,
-    // handle numeric and string values and avoid creating extra cells/columns.
-    // also update header arrow indicator when sorted.
-    html.append("<script>\n")
-        .append("function sortTable(n){\n")
-        .append("  const table = document.getElementById('dataTbl');\n")
-        .append("  const tbody = table.tBodies[0];\n")
-        .append("  if (!tbody) return;\n")
-        .append("  // determine sort order: toggle if same column clicked repeatedly\n")
-        .append("  const lastCol = table.getAttribute('data-sort-col');\n")
-        .append("  let asc = table.getAttribute('data-sort-dir') !== 'asc' || lastCol !== String(n);\n")
-        .append("  const rows = Array.from(tbody.querySelectorAll('tr'));\n")
-        .append("  rows.sort((r1, r2) => {\n")
-        .append("    let a = (r1.cells[n] ? r1.cells[n].textContent.trim() : '');\n")
-        .append("    let b = (r2.cells[n] ? r2.cells[n].textContent.trim() : '');\n")
-        .append("    const na = parseFloat(a.replace(/,/g, ''));\n")
-        .append("    const nb = parseFloat(b.replace(/,/g, ''));\n")
-        .append("    if (!isNaN(na) && !isNaN(nb)) {\n")
-        .append("      return asc ? na - nb : nb - na;\n")
-        .append("    }\n")
-        .append("    return asc ? a.localeCompare(b) : b.localeCompare(a);\n")
-        .append("  });\n")
-        .append("  rows.forEach(r => tbody.appendChild(r));\n")
-        .append("  table.setAttribute('data-sort-col', n);\n")
-        .append("  table.setAttribute('data-sort-dir', asc ? 'asc' : 'desc');\n")
-        .append("  updateIndicators(n, asc);\n")
-        .append("}\n")
-        .append("function updateIndicators(col, asc) {\n")
-        .append("  const table = document.getElementById('dataTbl');\n")
-        .append("  const headers = table.querySelectorAll('th');\n")
-        .append("  headers.forEach((th, i) => {\n")
-        .append("    th.classList.remove('sorted-asc','sorted-desc');\n")
-        .append("    if (i === col) {\n")
-        .append("      th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');\n")
-        .append("    }\n")
-        .append("  });\n")
-        .append("}\n")
-        .append("</script>\n");
+        StringBuilder html = new StringBuilder();
+        html.append("<!doctype html><html><head><meta charset='utf-8'><title>Moving Average Report</title>");
+        html.append("<style>")
+            .append("body{font-family:Arial,sans-serif;padding:18px;color:#111}")
+            .append("table{border-collapse:collapse;width:100%;margin:12px 0}")
+            .append("th,td{border:1px solid #ddd;padding:8px;text-align:left}")
+            .append("th{background:#f2f2f2;cursor:pointer}")
+            .append("th:hover{background:#e8e8e8}")
+            .append("th.sorted-asc::after,th.sorted-desc::after{margin-left:4px}")
+            .append("th.sorted-asc::after{content:' ▲'}")
+            .append("th.sorted-desc::after{content:' ▼'}")
+            .append("#paginationWrap{padding:12px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb;margin:16px 0;text-align:center}")
+            .append("button{padding:6px 12px;margin:0 4px;border:none;background:#2563eb;color:white;border-radius:4px;cursor:pointer}")
+            .append("button:hover{background:#1d4ed8}")
+            .append("input[type=number]{border:1px solid #d1d5db;border-radius:4px;padding:4px;width:60px}")
+            .append("</style>");
 
-    html.append("</head><body>");
-    html.append("<h1>Moving Average Report</h1>");
-    html.append("<p>Click any column header to sort &nbsp;&#x25B2;/&#x25BC; the data</p>");
-    html.append("<p>Total filtered rows: ").append(totalRows).append("</p>");
-    html.append("<p>Total of total_sales (filtered): ").append(String.format("%.2f", sumSales)).append("</p>");
-    html.append("<table id='dataTbl' data-sort-col='' data-sort-dir=''><thead><tr>");
-    html.append("<th onclick='sortTable(0)'>Title</th>");
-    html.append("<th onclick='sortTable(1)'>Release Date</th>");
-    html.append("<th onclick='sortTable(2)'>Total Sales</th>");
-    html.append("<th onclick='sortTable(3)'>3-Record Moving Avg</th>");
-    html.append("</tr></thead><tbody>");
+        html.append("<script>\n");
+        html.append("const ITEMS_PER_PAGE = ").append(itemsPerPage).append(";\n");
+        html.append("let currentPage = 1;\n");
+        html.append("let allRecords = ").append(buildJsonArray(records)).append(";\n");
+        
+        html.append("function renderPage() {\n")
+            .append("  const totalPages = Math.ceil(allRecords.length / ITEMS_PER_PAGE);\n")
+            .append("  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;\n")
+            .append("  const endIdx = Math.min(startIdx + ITEMS_PER_PAGE, allRecords.length);\n")
+            .append("  const tbody = document.getElementById('dataTbl').tBodies[0];\n")
+            .append("  tbody.innerHTML = '';\n")
+            .append("  for (let i = startIdx; i < endIdx; i++) {\n")
+            .append("    const r = allRecords[i];\n")
+            .append("    const tr = document.createElement('tr');\n")
+            .append("    tr.innerHTML = '<td>' + r.title + '</td><td>' + r.date + '</td><td>' + r.sales.toFixed(2) + '</td><td>' + r.movAvg + '</td>';\n")
+            .append("    tbody.appendChild(tr);\n")
+            .append("  }\n")
+            .append("  updatePaginationUI(totalPages);\n")
+            .append("}\n");
 
-    for (DataRecord r : records) {
-        html.append("<tr>");
-        html.append("<td>").append(escapeHtml(r.getTitle())).append("</td>");
-        html.append("<td>").append(escapeHtml(r.getReleaseDateRaw())).append("</td>");
-        html.append("<td>").append(String.format("%.2f", r.getTotalSales())).append("</td>");
-        html.append("<td>").append(r.getMovingAvg()).append("</td>");
-        html.append("</tr>");
+        html.append("function updatePaginationUI(totalPages) {\n")
+            .append("  const wrap = document.getElementById('paginationWrap');\n")
+            .append("  if (totalPages <= 1) { wrap.style.display = 'none'; return; }\n")
+            .append("  wrap.style.display = 'block';\n")
+            .append("  let html = '';\n")
+            .append("  if (currentPage > 1) html += '<button onclick=\"goPage(1)\">« First</button> <button onclick=\"goPage(' + (currentPage-1) + ')\">← Prev</button> ';\n")
+            .append("  html += '<span>Page <input type=\"number\" min=\"1\" max=\"' + totalPages + '\" value=\"' + currentPage + '\" id=\"pageNum\" onchange=\"goPage(parseInt(this.value))\"> of ' + totalPages + ' (' + allRecords.length + ' records)</span> ';\n")
+            .append("  if (currentPage < totalPages) html += '<button onclick=\"goPage(' + (currentPage+1) + ')\">Next →</button> <button onclick=\"goPage(' + totalPages + ')\">Last »</button>';\n")
+            .append("  wrap.innerHTML = html;\n")
+            .append("}\n");
+
+        html.append("function goPage(n) {\n")
+            .append("  const totalPages = Math.ceil(allRecords.length / ITEMS_PER_PAGE);\n")
+            .append("  if (n < 1 || n > totalPages) return;\n")
+            .append("  currentPage = n;\n")
+            .append("  renderPage();\n")
+            .append("}\n");
+
+        html.append("function sortTable(colIdx) {\n")
+            .append("  const asc = !document.getElementById('dataTbl').dataset.ascending || document.getElementById('dataTbl').dataset.sortCol !== String(colIdx);\n")
+            .append("  allRecords.sort((a, b) => {\n")
+            .append("    let aVal = colIdx === 0 ? a.title : colIdx === 1 ? a.date : colIdx === 2 ? a.sales : parseFloat(a.movAvg);\n")
+            .append("    let bVal = colIdx === 0 ? b.title : colIdx === 1 ? b.date : colIdx === 2 ? b.sales : parseFloat(b.movAvg);\n")
+            .append("    if (typeof aVal === 'number' && typeof bVal === 'number') return asc ? aVal - bVal : bVal - aVal;\n")
+            .append("    return asc ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));\n")
+            .append("  });\n")
+            .append("  document.getElementById('dataTbl').dataset.sortCol = colIdx;\n")
+            .append("  document.getElementById('dataTbl').dataset.ascending = asc;\n")
+            .append("  currentPage = 1;\n")
+            .append("  renderPage();\n")
+            .append("  updateSortIndicators(colIdx, asc);\n")
+            .append("}\n");
+
+        html.append("function updateSortIndicators(col, asc) {\n")
+            .append("  document.querySelectorAll('th').forEach((th, i) => {\n")
+            .append("    th.classList.remove('sorted-asc', 'sorted-desc');\n")
+            .append("    if (i === col) th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');\n")
+            .append("  });\n")
+            .append("}\n");
+
+        html.append("window.addEventListener('DOMContentLoaded', renderPage);\n");
+        html.append("</script>\n");
+
+        html.append("</head><body><h1>Moving Average Report</h1>");
+        html.append("<p>Click column headers to sort. ");
+        html.append("Total rows: ").append(totalRows).append("; ");
+        html.append("Total sales: ").append(String.format("%.2f", sumSales)).append("</p>");
+        html.append("<table id='dataTbl' data-sort-col='0' data-ascending='false'>");
+        html.append("<thead><tr>");
+        html.append("<th onclick='sortTable(0)'>Title</th>");
+        html.append("<th onclick='sortTable(1)'>Release Date</th>");
+        html.append("<th onclick='sortTable(2)'>Total Sales</th>");
+        html.append("<th onclick='sortTable(3)'>3-Record Moving Avg</th>");
+        html.append("</tr></thead><tbody></tbody></table>");
+        html.append("<div id='paginationWrap' style='display:none;'></div>");
+        html.append("<p><small>Generated by MovingAverageApp</small></p>");
+        html.append("</body></html>");
+
+        Files.write(outPath, html.toString().getBytes("UTF-8"));
     }
 
-    html.append("</tbody></table>");
-    html.append("<p>Generated by MovingAverageApp</p>");
-    html.append("</body></html>");
-    Files.write(outPath, html.toString().getBytes("UTF-8"));
-}
+    // Convert records to JSON array for client-side pagination
+    private static String buildJsonArray(List<DataRecord> records) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < records.size(); i++) {
+            DataRecord r = records.get(i);
+            if (i > 0) json.append(",");
+            json.append("{\"title\":\"").append(jsonEscape(r.getTitle()))
+                .append("\",\"date\":\"").append(jsonEscape(r.getReleaseDateRaw()))
+                .append("\",\"sales\":").append(r.getTotalSales())
+                .append(",\"movAvg\":\"").append(jsonEscape(r.getMovingAvg()))
+                .append("\"}");
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    // Escape special characters for JSON
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
 
     // simple HTML escape to avoid broken markup
     private static String escapeHtml(String s) {
