@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uhh</title>
+</head>
+<body>
+    <div>math Calculator</div>
+    <div>
+        <input id="num1" type="number" placeholder="a11"><br>
+        <input id="num2" type="number" placeholder="a12"><br>
+        <input id="num3" type="number" placeholder="a13"><br>
+        <input id="num4" type="number" placeholder="a21"><br>
+        <input id="num5" type="number" placeholder="a22"><br>
+        <input id="num6" type="number" placeholder="a23"><br>
+        <input id="num7" type="number" placeholder="a31"><br>
+        <input id="num8" type="number" placeholder="a32"><br>
+        <input id="num9" type="number" placeholder="a33">
+    </div>
+    <div>
+        output
+        <input type="text" id="output" disabled>
+    </div>
+    <div>
+        <button onclick="math()">calc</button>
+    </div>
+</body>
+</html>
+<script>
+    function math(){
+        const out = document.getElementById('output');
+        const n1 = document.getElementById('num1').value;
+        const n2 = document.getElementById('num2').value;
+        const n3 = document.getElementById('num3').value;
+        const n4 = document.getElementById('num4').value;
+        const n5 = document.getElementById('num5').value;
+        const n6 = document.getElementById('num6').value;
+        const n7 = document.getElementById('num7').value;
+        const n8 = document.getElementById('num8').value;
+        const n9 = document.getElementById('num9').value;
+        
+        const a = Number(n1);
+        const b = Number(n2);
+        const c = Number(n3);
+        const d = Number(n4);
+        const e = Number(n5);
+        const f = Number(n6);
+        const g = Number(n7);
+        const h = Number(n8);
+        const i = Number(n9);
+
+        let sol = (a*((e*i)-(f*h))) - (b*((d*i)-(f*g))) + (c*((d*h)-(e*g)))
+        out.value = sol
+    }
+</script>
